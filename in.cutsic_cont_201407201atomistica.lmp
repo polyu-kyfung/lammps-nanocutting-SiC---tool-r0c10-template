@@ -1,0 +1,245 @@
+# Input file for nanocutting of Cubic SiC with a diamond tool
+# Chris Fung, April 2013
+
+# input variables
+# -potential (choose the version of Tersoff potential used, options=y94/EA/TersoffScr)
+# -v (cutting velocity = v * 100 (m s^-1 in x-direction))
+#x -grooveDepth (choose a value in the range from 0.0 to 9.0 angstroms)
+#x -grooveTan (half angle of the groove in tangent = half width/depth)
+
+#variable respath string ${v}x100_m_s-1_Groove${grooveDepth}T${grooveTan}_SiC_${potential}
+variable respath string ${v}x100_m_s-1_SiC_${potential}
+
+print "${respath}"
+shell mkdir ${respath}
+shell mkdir ${respath}/log_files
+shell mkdir ${respath}/restart_files
+shell mkdir ${respath}/ovito_analysis-results
+shell chmod 774 ${respath}
+shell chmod 774 ${respath}/log_files
+shell chmod 774 ${respath}/restart_files
+shell chmod 777 ${respath}/ovito_analysis_results
+
+package cuda gpu/node 1 0
+package omp 2 force/neigh
+# ------------------------ INITIALIZATION ----------------------------
+units 		metal
+dimension	3
+boundary	s	s	p
+atom_style	atomic
+
+
+read_restart cut_sic.pre_cut_LT.restart
+reset_timestep 0
+fix 13 all property/atom mol
+
+#dump	 0dumpCSP all custom  500 dump.cutsic.*.lammpstrj id type mol x y z vx vy vz
+#run 0
+
+group gpDia type 1
+group gpCTbd  molecule  3
+group gpCTtsbd  molecule 2
+group gpCTmob molecule 1
+
+print "diamond tool created"
+#------------------------------------------------------------
+
+# define the lattice of cubic SiC (two atom types form two interpenetrating face-centered cubic lattices)
+
+
+# groups atoms
+group gpSiC type 2 3
+group gpWPbd molecule 6
+group gpWPtsbd molecule 5 
+group gpWPmob molecule 4
+
+group mobile subtract all gpCTtsbd gpWPtsbd
+
+print "Workpiece created"
+
+#-------------------------------------------------
+
+
+# define the mass of atoms
+mass 1 12 #.0107 # C (g/mol)
+mass 2 28 #.0855 # Si (g/mol)
+mass 3 12 #.0107 # C (g/mol)
+
+variable a equal 4.3667
+variable b equal 3.571
+variable c equal $a/$b
+variable dx equal 70*$c
+variable dy equal 5*$c
+variable lx equal 31
+variable ly equal 31
+variable dx1 equal ${dx}+${lx}
+variable dy1 equal ${dy}+${ly}
+variable lr equal 4
+variable rx equal ${dx}+${lr}
+variable ry equal ${dy}+${lr}
+variable tx1 equal ${dx}+${lr}+2.35
+variable tx2 equal ${dx1}+${lr}+2.35
+variable ty2 equal ${dy}+${lx}*tan(10/180*PI)
+variable bx1 equal ${dx1}-1
+variable bx2 equal ${bx1}-1
+variable by1 equal ${dy1}-1
+variable by2 equal ${by1}-1
+
+#lattice diamond $b
+#variable gy equal ${grooveDepth}+3.2226178427343
+#variable gy1 equal ${gy}+1.0
+#variable gz1 equal ${grooveTan}*18+1.5
+#region groove4 block  ${dx} ${dx1} ${gy} ${gy1} 2.5 ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal 2.5+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove5 block  ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove6 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove7 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove8 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove9 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove10 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove11 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+#variable gy1 equal ${gy1}+1.0
+#variable gz0 equal ${gz0}+${grooveTan}
+#variable gz1 equal ${gz1}-${grooveTan}
+#region groove12 block ${dx} ${dx1} ${gy} ${gy1} ${gz0} ${gz1}
+
+#delete_atoms #region groove4
+#delete_atoms #region groove5
+#delete_atoms #region groove6
+#delete_atoms #region groove7
+#delete_atoms #region groove8
+#delete_atoms #region groove9
+#delete_atoms #region groove10
+#delete_atoms #region groove11
+#delete_atoms #region groove12
+
+
+#lattice fcc 4.3596 origin 0 0 0 
+
+# ------------------------ FORCE FIELDS ------------------------------
+if "${potential} == TersoffScr" then "pair_style atomistica TersoffScr" &
+else "pair_style	tersoff"
+ #variable index string ${potential}
+if "${potential} == EA"  then "pair_coeff	* * SiC_Erhart-Albe.tersoff C Si C" &
+elif "${potential} == y94"  "pair_coeff	* * SiC_1994.tersoff C Si C" &
+elif "${potential} == TersoffScr"  "pair_coeff	* * C Si C" &
+else "print 'choose the variable -potential to be y94 or EA'" & quit
+
+# ------------------------- SETTINGS ---------------------------------######################################
+
+# DEFORMATION
+
+
+fix 1 gpWPall nvt temp 300.0 300.0 0.05 #iso 1.0 1.0 0.5
+fix 2 gpCTall nvt temp 300.0 300.0 0.05 #iso 1.0 1.0 0.5
+
+unfix 1
+unfix 2
+
+compute myCTtemp gpCTmob temp/partial 0 1 1
+compute myWPtemp gpWPmob temp/partial 0 1 1
+compute myCTTStemp gpCTtsbd temp
+compute myWPTStemp gpWPtsbd temp/partial 0 1 1
+#compute myCTpress gpCTmob pressure myCTtemp
+#compute myWPpress gpWPmob pressure myWPtemp
+
+timestep 0.0005 # set 1 femtosecond per step
+
+fix 1 gpWPtsbd nvt temp 300.0 300.0 0.05 #iso 1.0 1.0 0.5
+fix_modify 1 temp myWPTStemp
+fix 2 gpCTtsbd nvt temp 300.0 300.0 0.05 #iso 1.0 1.0 0.5
+fix_modify 2 temp myCTTStemp
+
+#unfix 3
+#unfix 4
+
+#fix 3 gpWPbd setforce 0.0 0.0 0.0 #move linear 0 0 0
+#fix 4 gpCTbd setforce 0.0 0.0 0.0 # units box sum no 
+#velocity gpCTbd set -1.0 0.0 0.0 units box
+fix 3 gpWPbd move linear 0 0 0
+fix 4 gpCTbd move linear 0 0 0 units box  # cutting speed = v * 100 (m s^-1 in the x-direction)
+
+fix 5 mobile nve
+
+fix 10 all balance 30 1.05 shift xy 10 1.05 out ${respath}/log_files/tmp.balance
+
+
+
+compute ke all ke/atom
+fix 12 all ave/atom 10 50 500 c_ke
+#fix 13 all property/atom mol
+
+#set group gpCTmob mol 1
+#set group gpCTtsbd mol 2
+#set group gpCTbd mol 3
+
+#set group gpWPmob mol 4
+#set group gpWPtsbd mol 5
+#set group gpWPbd mol 6
+
+shell cp log.lammps ${respath}/log_files/
+log ${respath}/log_files/cut_sic_re_eq.log
+
+# Re-equilibrium
+
+thermo 	500
+thermo_style custom step c_myCTtemp c_myWPtemp press etotal fmax fnorm
+
+run 0 # 20 ps
+
+print "Complete re-equilibrium"
+
+# start cutting
+
+log ${respath}/log_files/cut_sic_cut.log
+reset_timestep 0
+
+unfix 4
+fix 4 gpCTbd move linear -$v 0 0 units box  # cutting speed = v * 100 (m s^-1 in the x-direction)
+
+# Output strain and stress info to file
+# for units metal, pressure is in [bars] = 100 [kPa] = 1/10000 [GPa]
+# p2, p3, p4 are in GPa
+
+
+dump	 0dumpCSP all custom  500 ${respath}/dump.cutsic.*.lammpstrj id type mol x y z vx vy vz f_12
+  #c_atomdisp[4] c_atomstres[1] c_atomstres[2] c_atomstres[3] c_atomstres[4] c_atomstres[5] c_atomstres[6] 
+dump_modify 0dumpCSP element C Si C
+
+write_restart cut_sic_re_eq.0000.restart
+restart 10000 ${respath}/restart_files/cut_sic.*.restart
+
+# For the cutting advancement of 20 nm
+variable Nstep equal ceil(400000/$v)
+run ${Nstep}
+#run   133333  # if vx = -3.0
+#run	200000  # if vx = -2.0
+#run   400000  # if vx = -1.0
+
+
+
+######################################
+# SIMULATION DONE
+
+print "All done"
+

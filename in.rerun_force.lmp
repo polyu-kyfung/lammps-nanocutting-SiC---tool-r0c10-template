@@ -1,0 +1,62 @@
+log rerun.log
+
+# input variables
+# -potential (choose the version of Tersoff potential used, options=y94/EA)
+# -v (cutting velocity = v * 100 (m s^-1 in x-direction))
+# -grooveDepth (choose a value in the range from 0.0 to 9.0 angstroms)
+# -grooveTan (half angle of the groove in tangent = half width/depth)
+
+variable respath string ${v}x100_m_s-1_SiC_${potential}
+print "${respath}"
+
+log ${respath}/log_files/rerun_force.log
+
+package cuda gpu/node 1 0
+#package omp 2 force/neigh
+# ------------------------ INITIALIZATION ----------------------------
+units 		metal
+dimension	3
+boundary	s	s	p
+atom_style	atomic
+
+
+read_restart ${respath}/restart_files/cut_sic.10000.restart 
+# read_restart cut_sic.pre_cut.restart
+fix 13 all property/atom mol
+
+# ------------------------ FORCE FIELDS ------------------------------
+
+pair_style	tersoff
+ #variable index string ${potential}
+if "${potential} == EA"  then "pair_coeff	* * SiC_Erhart-Albe.tersoff C Si C" &
+elif "${potential} == y94"  "pair_coeff	* * SiC_1994.tersoff C Si C" &
+else "print 'choose the variable -potential to be y94 or EA'" & quit
+
+
+mass 1 12 #.0107 # C (g/mol)
+mass 2 28 #.0855 # Si (g/mol)
+mass 3 12 #.0107 # C (g/mol)
+
+
+
+timestep 0.0005 # set 1 femtosecond per step
+
+compute	           s all stress/atom NULL
+compute	           k all ke/atom
+compute 	vor all voronoi/atom
+
+# compute m all property/atom mol
+dump		1 all custom 500 ${respath}/dump.force.cut_sic.* id type mol x y z vx vy vz fx fy fz c_k  c_s[1] c_s[2] c_s[3]  c_s[4] c_s[5] c_s[6] c_vor[1]
+
+variable Nstep equal floor(ceil(400000/$v)/500)+1
+
+label loop
+variable i loop ${Nstep}
+variable j equal ($i-1)*500
+rerun ${respath}/dump.cutsic.$j.lammpstrj dump x y z box yes scaled no format native purge yes
+next i
+jump SELF loop
+variable i delete
+variable j delete
+
+jump ../in.senddone.lmp
